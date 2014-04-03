@@ -234,9 +234,9 @@ class Draw(cols:Int, rows:Int, image:ImageFun.Image[Color]) {
 
 object Examples {
    val testGrid = ImageFun.grid(20, 2)
-   val floydBitmap = ImageFun.bitmap("floyd.png")
-   def rotate45[T]:ImageFun.ImageTrans[T] = ImageFun.rotate(Pi/4, 0, 0)
-   val scaleRotateBitmap = ImageFun.scale(0.1, 0, 0)(rotate45(floydBitmap))
+   //val floydBitmap = ImageFun.bitmap("floyd.png")
+   //def rotate45[T]:ImageFun.ImageTrans[T] = ImageFun.rotate(Pi/4, 0, 0)
+   //val scaleRotateBitmap = ImageFun.scale(0.1, 0, 0)(rotate45(floydBitmap))
 
    def waveAnimation(time:Double):ImageFun.Image[Color] = {
       ImageFun.wave(time * 2, 2, 0.8, 100, 200, 150)(testGrid)
