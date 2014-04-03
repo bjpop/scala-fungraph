@@ -70,13 +70,16 @@ object ImageFun {
    val green:Image[Color] = (_, _) => new Color(0, 255, 0)
    
    // Black and white grid with vertical/horizontal lines
-   def grid(cellSize:Double, lineThickness:Double):Image[Color] =
+   def grid(cellSize:Double, lineThickness:Double):Image[Color] = {
+      val black = new Color(0, 0, 0)
+      val white = new Color(255, 255, 255)
       (col, row) =>
          if (modDouble(col, cellSize) < lineThickness || 
              modDouble(row, cellSize) < lineThickness)
-            new Color(0, 0, 0)
+            black
          else
-            new Color(255, 255, 255)
+            white
+   }
 
    /* Want to write it like this, but Scala's won't type it
    def aboutPoint[T](imageTrans:ImageTrans[T],
