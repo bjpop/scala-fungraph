@@ -82,23 +82,9 @@ object ImageFun {
             white
    }
 
-   /* Want to write it like this, but Scala's won't type it
-   def aboutPoint[T](imageTrans:ImageTrans[T],
-         centerCol:Double, centerRow:Double):ImageTrans[T] = {
-      translate(-centerCol, -centerRow) andThen
-      imageTrans andThen
-      translate(centerCol, centerRow)
-   }
-   */
+   def aboutPoint[T](t:ImageTrans[T], col:Double, row:Double):ImageTrans[T] =
+      translate(-col, -row) andThen t andThen translate(col, row)
 
-   // Apply an image transformation about some point
-   def aboutPoint[T](imageTrans:ImageTrans[T],
-         centerCol:Double, centerRow:Double):ImageTrans[T] = {
-      val t1:ImageTrans[T] = translate(-centerCol, -centerRow) andThen imageTrans 
-      val t2:ImageTrans[T] = t1 andThen translate(centerCol, centerRow)
-      t2
-   }
-   
    // Scale image about the origin
    def scaleOrigin[T](factor:Double):ImageTrans[T] =
       coordTrans((col, row) => (col / factor, row / factor))
@@ -186,14 +172,14 @@ object ImageFun {
          amp:Double, period:Double):ImageTrans[T] = {
       (image:Image[T]) => {
          (col:Double, row:Double) => {
-            val scale = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
-            scaleOrigin(scale)(image)(col, row)
+            val scaleAmount = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            scaleOrigin(scaleAmount)(image)(col, row)
          }
       }
    }
 
    // Scale an image using a cosine wave about a point.
-   def wave[T](phaseShift: Double, vertShift:Double, amp:Double,
+   def waveScale[T](phaseShift: Double, vertShift:Double, amp:Double,
                period:Double, centerCol:Double, centerRow:Double):ImageTrans[T] = {
       aboutPoint(waveScaleOrigin(phaseShift, vertShift, amp, period),
                  centerCol, centerRow) 
@@ -289,14 +275,14 @@ object Examples {
 
    def waveGridAnimation(time:Double):ImageFun.Image[Color] = {
       val testGrid = ImageFun.grid(20, 2)
-      ImageFun.wave(time * 2, 2, 0.8, 100, 200, 150)(testGrid)
+      ImageFun.waveScale(time * 2, 1, 0.3, 100, 200, 150)(testGrid)
    }
 
    def waveBitmapAnimation(time:Double):ImageFun.Image[Color] = {
       val floydBitmap = ImageFun.bitmap("floyd.png")
       val scaleRotateBitmap =
          ImageFun.scale(0.1, 0, 0)(ImageFun.rotate(Pi/4, 0, 0)(floydBitmap))
-      ImageFun.wave(time * 2, 2, 0.8, 100, 200, 150)(scaleRotateBitmap)
+      ImageFun.waveScale(time * 2, 2, 0.8, 100, 200, 150)(scaleRotateBitmap)
    }
 
    def waveTranslateAnimation(time:Double):ImageFun.Image[Color] = {
@@ -307,9 +293,9 @@ object Examples {
 
 object Main {
    def main(args: Array[String]) = {
-      new Animate(400, 300, Examples.waveTranslateAnimation).show()
+      //new Animate(400, 300, Examples.waveTranslateAnimation).show()
       //new Animate(400, 300, Examples.waveGridAnimation).show()
       //new Animate(400, 300, Examples.waveBitmapAnimation).show()
-      //new Animate(400, 300, Examples.rippleAnimation).show()
+      new Animate(400, 300, Examples.rippleAnimation).show()
    }
 }
