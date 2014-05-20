@@ -60,6 +60,7 @@ object ImageFun {
          (col:Double, row:Double) => 
             image.tupled(trans(col, row))
    
+   // Apply an image transformation about a point
    def aboutPoint[T](transform:ImageTrans[T], col:Double, row:Double):ImageTrans[T] =
       translate(-col, -row) andThen transform andThen translate(col, row)
 
@@ -103,9 +104,11 @@ object ImageFun {
       }
    }
    
+   // Make sure intensity value is in the range [0, 255] inclusive.
    def clampIntensity(intensity:Int) =
       min(max(intensity, 0), 255)
 
+   // Scale all intensity components of a colour by the same factor
    def scaleColor(scale:Double, color:Color):Color = {
       val newRed = clampIntensity((color.getRed * scale).toInt)
       val newGreen = clampIntensity((color.getGreen * scale).toInt)
@@ -116,53 +119,13 @@ object ImageFun {
 
 object ImageTransExamples {
 
-   import ImageFun._
-
-   def waveColorOrigin(phaseShift: Double, vertShift:Double,
-          amp:Double, period:Double):ImageTrans[Color] = {
-      (image:Image[Color]) =>
-         (col:Double, row:Double) => {
-            val scale = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, row)
-            scaleColor(scale, image(col, row))
-         }
-   }
-
-   def waveColor(phaseShift: Double, vertShift:Double, amp:Double,
-         period:Double, col:Double, row:Int):ImageTrans[Color] =
-      aboutPoint(waveColorOrigin(phaseShift, vertShift, amp, period), col, row) 
-   
-   def waveScaleOrigin[T](phaseShift: Double, vertShift:Double,
-         amp:Double, period:Double):ImageTrans[T] = {
-      (image:Image[T]) => {
-         (col:Double, row:Double) => {
-            val scaleAmount = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, row)
-            scaleOrigin(scaleAmount)(image)(col, row)
-         }
-      }
-   }
-
-   // Scale an image using a cosine wave about a point.
-   def waveScale[T](phaseShift: Double, vertShift:Double, amp:Double,
-               period:Double, centerCol:Double, centerRow:Double):ImageTrans[T] = {
-      aboutPoint(waveScaleOrigin(phaseShift, vertShift, amp, period),
-                 centerCol, centerRow) 
-   }
-
-   def waveTranslate[T](phaseShift: Double, vertShift:Double, amp:Double, period:Double):ImageTrans[T] = {
-      (image:Image[T]) =>
-         (col, row) => {
-            val trans = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, 0)
-            translate(0, trans)(image)(col, row)
-         }
-   }
-}
-
-object ImageExamples {
-
    import Math._
    import ImageFun._
 
-   /* General form of a cosine wave:
+   /* Compute a two dimensional wave based on cosine, and distance from
+      the origin.
+
+      General form of a cosine wave:
 
       F(x) = A cos(Bx - C) + D
       
@@ -171,12 +134,6 @@ object ImageExamples {
       C/B = phase shift 
       D = vertical shift
    */
-
-   // Constant color images
-   val redImage:Image[Color] = (_, _) => new Color(255, 0, 0)
-   val blueImage:Image[Color] = (_, _) => new Color(0, 0, 255)
-   val greenImage:Image[Color] = (_, _) => new Color(0, 255, 0)
-   val blueGreenImage:Image[Color] = (_, _) => new Color(0, 255, 255)
 
    def waveIntensity(phaseShift: Double, vertShift:Double,
          amp:Double, period:Double):Image[Double] = {
@@ -187,6 +144,64 @@ object ImageExamples {
          amp * + cos(compress * d - phaseFactor) + vertShift
       }
    }
+
+   // Scale the colour of a image based on a wave function, based on
+   // distance of point from the origin.
+   def waveColorOrigin(phaseShift: Double, vertShift:Double,
+          amp:Double, period:Double):ImageTrans[Color] = {
+      (image:Image[Color]) =>
+         (col:Double, row:Double) => {
+            val scale = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            scaleColor(scale, image(col, row))
+         }
+   }
+
+   // Scale the colour of a image based on a wave function, based on
+   // distance of point from some other point.
+   def waveColor(phaseShift: Double, vertShift:Double, amp:Double,
+         period:Double, col:Double, row:Int):ImageTrans[Color] =
+      aboutPoint(waveColorOrigin(phaseShift, vertShift, amp, period), col, row) 
+   
+   // Scale the magnification of a image based on a wave function, based on
+   // distance of point from the origin.
+   def waveScaleOrigin[T](phaseShift: Double, vertShift:Double,
+         amp:Double, period:Double):ImageTrans[T] = {
+      (image:Image[T]) => {
+         (col:Double, row:Double) => {
+            val scaleAmount = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            scaleOrigin(scaleAmount)(image)(col, row)
+         }
+      }
+   }
+
+   // Scale the magnification of a image based on a wave function, based on
+   // distance of point from some other point.
+   def waveScale[T](phaseShift: Double, vertShift:Double, amp:Double,
+               period:Double, centerCol:Double, centerRow:Double):ImageTrans[T] = {
+      aboutPoint(waveScaleOrigin(phaseShift, vertShift, amp, period),
+                 centerCol, centerRow) 
+   }
+
+   // Translate an image vertically based on a wave function.
+   def waveTranslate[T](phaseShift: Double, vertShift:Double, amp:Double, period:Double):ImageTrans[T] = {
+      (image:Image[T]) =>
+         (col, row) => {
+            val trans = waveIntensity(phaseShift, vertShift, amp, period)(col, 0)
+            translate(0, trans)(image)(col, row)
+         }
+   }
+}
+
+object ImageExamples {
+
+   import Math._
+   import ImageFun._
+
+   // Constant color images
+   val redImage:Image[Color] = (_, _) => new Color(255, 0, 0)
+   val blueImage:Image[Color] = (_, _) => new Color(0, 0, 255)
+   val greenImage:Image[Color] = (_, _) => new Color(0, 255, 0)
+   val blueGreenImage:Image[Color] = (_, _) => new Color(0, 255, 255)
 
    // Black and white grid with vertical/horizontal lines
    def grid(cellSize:Double, lineThickness:Double):Image[Color] = {
