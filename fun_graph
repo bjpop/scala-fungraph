@@ -1,0 +1,5 @@
+#!/bin/sh
+
+SCALA=$HOME/code/scala-2.10.4/bin/scala
+
+$SCALA Main $@
