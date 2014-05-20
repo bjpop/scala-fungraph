@@ -299,10 +299,32 @@ object Main {
    
    import AnimationExamples._
 
+   val usage = """
+      fun_graph demo 
+
+      demo must be one of:
+         translate_wave      translate pixels in a bitmap as vertical wave
+         grid_wave           translate scale of a grid as wave from center of image
+         bitmap_wave         translate scale of a bitmap as wave from center of image
+         colour_wave         translate colour of image as waves from two centers
+      """
+
    def main(args: Array[String]) = {
-      //new Animate(400, 300, waveTranslateAnimation).show()
-      //new Animate(400, 300, waveGridAnimation).show()
-      //new Animate(400, 300, waveBitmapAnimation).show()
-      new Animate(400, 300, rippleAnimation).show()
+      if (args.length == 0)
+         println(usage)
+      else
+          args(0) match {
+             case "translate_wave" =>
+                new Animate(400, 300, waveTranslateAnimation).show()
+             case "grid_wave" =>
+                new Animate(400, 300, waveGridAnimation).show()
+             case "bitmap_wave" =>
+                new Animate(400, 300, waveBitmapAnimation).show()
+             case "colour_wave" =>
+                new Animate(400, 300, rippleAnimation).show()
+             case _ =>
+                println("fun_graph: Unrecognised demo name")
+                println(usage)
+          }
    }
 }
