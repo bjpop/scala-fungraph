@@ -21,37 +21,33 @@ import javax.swing.{Timer}
 import java.io.{File}
 import math.{cos, sin, abs, round, sqrt, pow, Pi, min, max}
 
-/*
-// For the parallel version of rasterize
-
-import scala.concurrent._
-import ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-*/
+object Math {
+   def distance(x1:Double, y1:Double, x2:Double, y2:Double):Double =
+      sqrt(pow(y1 - y2, 2) + pow(x1 - x2, 2))
+   
+   // Modulus which returns a positive result, even for
+   // negative numerators.
+   def modDouble(x:Double, y:Double):Double = {
+      val m = x % y
+      if (m < 0) m + y else m
+   }
+   
+   // Modulus which returns a positive result, even for
+   // negative numerators.
+   def modInt(x:Int, y:Int):Int = {
+      val m = x % y
+      if (m < 0) m + y else m
+   }
+}
 
 object ImageFun {
+
+   import Math._
 
    type Image[T] = (Double, Double) => T
    type ImageTrans[T] = Image[T] => Image[T]
    type Animation[T] = Double => Image[T]
    type CoordTrans = (Double, Double) => (Double, Double)
-
-   private def distance(x1:Double, y1:Double, x2:Double, y2:Double):Double =
-      sqrt(pow(y1 - y2, 2) + pow(x1 - x2, 2))
-   
-   // Modulus which returns a positive result, even for
-   // negative numerators.
-   private def modDouble(x:Double, y:Double):Double = {
-      val m = x % y
-      if (m < 0) m + y else m
-   }
-   
-   // Modulus which returns a positive result, even for
-   // negative numerators.
-   private def modInt(x:Int, y:Int):Int = {
-      val m = x % y
-      if (m < 0) m + y else m
-   }
 
    /* Want to write:
    def coordTrans[T](trans:CoordTrans):ImageTrans[T] =
@@ -64,26 +60,8 @@ object ImageFun {
          (col:Double, row:Double) => 
             image.tupled(trans(col, row))
    
-   // Constant color images
-   val redImage:Image[Color] = (_, _) => new Color(255, 0, 0)
-   val blueImage:Image[Color] = (_, _) => new Color(0, 0, 255)
-   val greenImage:Image[Color] = (_, _) => new Color(0, 255, 0)
-   val blueGreenImage:Image[Color] = (_, _) => new Color(0, 255, 255)
-   
-   // Black and white grid with vertical/horizontal lines
-   def grid(cellSize:Double, lineThickness:Double):Image[Color] = {
-      val black = new Color(0, 0, 0)
-      val white = new Color(255, 255, 255)
-      (col, row) =>
-         if (modDouble(col, cellSize) < lineThickness || 
-             modDouble(row, cellSize) < lineThickness)
-            black
-         else
-            white
-   }
-
-   def aboutPoint[T](t:ImageTrans[T], col:Double, row:Double):ImageTrans[T] =
-      translate(-col, -row) andThen t andThen translate(col, row)
+   def aboutPoint[T](transform:ImageTrans[T], col:Double, row:Double):ImageTrans[T] =
+      translate(-col, -row) andThen transform andThen translate(col, row)
 
    // Scale image about the origin
    def scaleOrigin[T](factor:Double):ImageTrans[T] =
@@ -125,26 +103,6 @@ object ImageFun {
       }
    }
    
-   /* General form of a cosine wave:
-
-      F(x) = A cos(Bx - C) + D
-      
-      A = amplitude
-      B = compression factor on x axis, B = 2Pi / period
-      C/B = phase shift 
-      D = vertical shift
-   */
-
-   def waveIntensity(phaseShift: Double, vertShift:Double,
-         amp:Double, period:Double):Image[Double] = {
-      val compress = 2 * Pi / period
-      val phaseFactor = phaseShift * compress
-      (col:Double, row:Double) => {
-         val d = distance(col, row, 0, 0) 
-         amp * + cos(compress * d - phaseFactor) + vertShift
-      }
-   }
-
    def clampIntensity(intensity:Int) =
       min(max(intensity, 0), 255)
 
@@ -154,12 +112,17 @@ object ImageFun {
       val newBlue = clampIntensity((color.getBlue * scale).toInt)
       new Color(newRed, newGreen, newBlue)
    }
+}
+
+object ImageTransExamples {
+
+   import ImageFun._
 
    def waveColorOrigin(phaseShift: Double, vertShift:Double,
           amp:Double, period:Double):ImageTrans[Color] = {
       (image:Image[Color]) =>
          (col:Double, row:Double) => {
-            val scale = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            val scale = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, row)
             scaleColor(scale, image(col, row))
          }
    }
@@ -172,7 +135,7 @@ object ImageFun {
          amp:Double, period:Double):ImageTrans[T] = {
       (image:Image[T]) => {
          (col:Double, row:Double) => {
-            val scaleAmount = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            val scaleAmount = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, row)
             scaleOrigin(scaleAmount)(image)(col, row)
          }
       }
@@ -188,13 +151,88 @@ object ImageFun {
    def waveTranslate[T](phaseShift: Double, vertShift:Double, amp:Double, period:Double):ImageTrans[T] = {
       (image:Image[T]) =>
          (col, row) => {
-            val trans = waveIntensity(phaseShift, vertShift, amp, period)(col, 0)
+            val trans = ImageExamples.waveIntensity(phaseShift, vertShift, amp, period)(col, 0)
             translate(0, trans)(image)(col, row)
          }
    }
 }
 
+object ImageExamples {
+
+   import Math._
+   import ImageFun._
+
+   /* General form of a cosine wave:
+
+      F(x) = A cos(Bx - C) + D
+      
+      A = amplitude
+      B = compression factor on x axis, B = 2Pi / period
+      C/B = phase shift 
+      D = vertical shift
+   */
+
+   // Constant color images
+   val redImage:Image[Color] = (_, _) => new Color(255, 0, 0)
+   val blueImage:Image[Color] = (_, _) => new Color(0, 0, 255)
+   val greenImage:Image[Color] = (_, _) => new Color(0, 255, 0)
+   val blueGreenImage:Image[Color] = (_, _) => new Color(0, 255, 255)
+
+   def waveIntensity(phaseShift: Double, vertShift:Double,
+         amp:Double, period:Double):Image[Double] = {
+      val compress = 2 * Pi / period
+      val phaseFactor = phaseShift * compress
+      (col:Double, row:Double) => {
+         val d = distance(col, row, 0, 0) 
+         amp * + cos(compress * d - phaseFactor) + vertShift
+      }
+   }
+
+   // Black and white grid with vertical/horizontal lines
+   def grid(cellSize:Double, lineThickness:Double):Image[Color] = {
+      val black = new Color(0, 0, 0)
+      val white = new Color(255, 255, 255)
+      (col, row) =>
+         if (modDouble(col, cellSize) < lineThickness || 
+             modDouble(row, cellSize) < lineThickness)
+            black
+         else
+            white
+   }
+}
+
+object AnimationExamples {
+
+   import ImageFun._
+   import ImageExamples._
+   import ImageTransExamples._
+
+   def rippleAnimation(time:Double):Image[Color] = {
+      waveColor(time * 6, 0.7, 0.3, 50, 300, 200)(
+         waveColor(time * 2, 0.6, 0.3, 70, 50, 100)(blueImage))
+   }
+
+   def waveGridAnimation(time:Double):Image[Color] = {
+      val testGrid = ImageExamples.grid(20, 2)
+      waveScale(time * 2, 1, 0.3, 100, 200, 150)(testGrid)
+   }
+
+   def waveBitmapAnimation(time:Double):Image[Color] = {
+      val floydBitmap = bitmap("floyd.png")
+      val scaleRotateBitmap =
+         scale(0.1, 0, 0)(rotate(Pi/4, 0, 0)(floydBitmap))
+      waveScale(time * 2, 2, 0.8, 100, 200, 150)(scaleRotateBitmap)
+   }
+
+   def waveTranslateAnimation(time:Double):Image[Color] = {
+      val floydBitmap = bitmap("floyd.png")
+      waveTranslate(time * 10, 0, 10, 100)(floydBitmap)
+   }
+}
+
 class Display(cols:Int, rows:Int) {
+
+   import ImageFun._
 
    private val buffer = new BufferedImage(cols, rows, BufferedImage.TYPE_INT_RGB)
    private val panel = new Panel {
@@ -209,25 +247,8 @@ class Display(cols:Int, rows:Int) {
       centerOnScreen()
    }
 
-   /*
-   // Parallel version
    // Quantize an image function and draw into a pixel buffer
-   def rasterize(image:ImageFun.Image[Color]) = {
-      val firstHalf = future {
-         for (y <- 0 to rows/2 - 1; x <- 0 to cols - 1)
-            buffer.setRGB(x, y, image(x, y).getRGB)
-      }
-      val secondHalf = future {
-         for (y <- rows/2 to rows - 1; x <- 0 to cols - 1)
-            buffer.setRGB(x, y, image(x, y).getRGB)
-      }
-      Await.result(firstHalf, Duration.Inf)
-      Await.result(secondHalf, Duration.Inf)
-   }
-   */
-
-   // Quantize an image function and draw into a pixel buffer
-   def rasterize(image:ImageFun.Image[Color]) = {
+   def rasterize(image:Image[Color]) = {
       for (x <- 0 to cols - 1; y <- 0 to rows - 1)
          buffer.setRGB(x, y, image(x, y).getRGB)
    }
@@ -237,6 +258,7 @@ class Display(cols:Int, rows:Int) {
 }
 
 class Animate(cols:Int, rows:Int, animation:ImageFun.Animation[Color]) {
+
    def show() = {
       val display = new Display(cols, rows)
       var time = 0.0
@@ -247,14 +269,6 @@ class Animate(cols:Int, rows:Int, animation:ImageFun.Animation[Color]) {
          display.repaint()
          time += timeDelta
       }
-/*
-      val timer = new Timer(100, Swing.ActionListener(event => {
-         display.rasterize(animation(time))
-         display.repaint()
-         time += timeDelta
-      }))
-      timer.start()
-*/
    }
 }
 
@@ -266,36 +280,14 @@ class Draw(cols:Int, rows:Int, image:ImageFun.Image[Color]) {
    }
 }
 
-object Examples {
-
-   def rippleAnimation(time:Double):ImageFun.Image[Color] = {
-      ImageFun.waveColor(time * 6, 0.7, 0.3, 50, 300, 200)(
-         ImageFun.waveColor(time * 2, 0.6, 0.3, 70, 50, 100)(ImageFun.blueImage))
-   }
-
-   def waveGridAnimation(time:Double):ImageFun.Image[Color] = {
-      val testGrid = ImageFun.grid(20, 2)
-      ImageFun.waveScale(time * 2, 1, 0.3, 100, 200, 150)(testGrid)
-   }
-
-   def waveBitmapAnimation(time:Double):ImageFun.Image[Color] = {
-      val floydBitmap = ImageFun.bitmap("floyd.png")
-      val scaleRotateBitmap =
-         ImageFun.scale(0.1, 0, 0)(ImageFun.rotate(Pi/4, 0, 0)(floydBitmap))
-      ImageFun.waveScale(time * 2, 2, 0.8, 100, 200, 150)(scaleRotateBitmap)
-   }
-
-   def waveTranslateAnimation(time:Double):ImageFun.Image[Color] = {
-      val floydBitmap = ImageFun.bitmap("floyd.png")
-      ImageFun.waveTranslate(time * 10, 0, 10, 100)(floydBitmap)
-   }
-}
-
 object Main {
+   
+   import AnimationExamples._
+
    def main(args: Array[String]) = {
-      //new Animate(400, 300, Examples.waveTranslateAnimation).show()
-      //new Animate(400, 300, Examples.waveGridAnimation).show()
-      //new Animate(400, 300, Examples.waveBitmapAnimation).show()
-      new Animate(400, 300, Examples.rippleAnimation).show()
+      //new Animate(400, 300, waveTranslateAnimation).show()
+      //new Animate(400, 300, waveGridAnimation).show()
+      //new Animate(400, 300, waveBitmapAnimation).show()
+      new Animate(400, 300, rippleAnimation).show()
    }
 }
