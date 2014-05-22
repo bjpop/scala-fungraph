@@ -21,7 +21,23 @@ import javax.swing.{Timer}
 import java.io.{File}
 import math.{cos, sin, abs, round, sqrt, pow, Pi, min, max}
 
+// Convert images of various types into color images
+object ColorImplicits {
+   import ImageFun._
+   import Math._
+
+   // true = white, false = black
+   implicit def BoolToColor(image:Image[Boolean]):Image[Color] = 
+      mapImage((value:Boolean) => if (value) Color.white else Color.black, image)
+
+   implicit def DoubleToColor(image:Image[Double]):Image[Color] = 
+      mapImage((value:Double) => {
+         val intensity = clampIntensity((value * 255).toInt)
+         new Color(intensity, intensity, intensity)}, image)
+}
+
 object Math {
+   // Cartesian distance between two points.
    def distance(x1:Double, y1:Double, x2:Double, y2:Double):Double =
       sqrt(pow(y1 - y2, 2) + pow(x1 - x2, 2))
    
@@ -38,6 +54,10 @@ object Math {
       val m = x % y
       if (m < 0) m + y else m
    }
+   
+   // Make sure intensity value is in the range [0, 255] inclusive.
+   def clampIntensity(intensity:Int) =
+      min(max(intensity, 0), 255)
 }
 
 object ImageFun {
@@ -48,6 +68,15 @@ object ImageFun {
    type ImageTrans[T] = Image[T] => Image[T]
    type Animation[T] = Double => Image[T]
    type CoordTrans = (Double, Double) => (Double, Double)
+
+   def mapImage[A,B](fun:A => B, image:Image[A]):Image[B] =
+      (col, row) => fun(image(col, row))
+
+   def combineImage[A,B,C](image1:Image[A], image2:Image[B], combine:(A, B) => C):Image[C] =
+      (col, row) => combine(image1(col, row), image2(col, row))
+
+   def combineMany[T](images:List[Image[T]], combine:(T, T) => T):Image[T] =
+      images.reduceLeft((image1, image2) => combineImage(image1, image2, combine))
 
    /* Want to write:
    def coordTrans[T](trans:CoordTrans):ImageTrans[T] =
@@ -103,10 +132,6 @@ object ImageFun {
          new Color(pixels.getRGB(colInt, rowInt))
       }
    }
-   
-   // Make sure intensity value is in the range [0, 255] inclusive.
-   def clampIntensity(intensity:Int) =
-      min(max(intensity, 0), 255)
 
    // Scale all intensity components of a colour by the same factor
    def scaleColor(scale:Double, color:Color):Color = {
@@ -121,46 +146,7 @@ object ImageTransExamples {
 
    import Math._
    import ImageFun._
-
-   /* Compute a two dimensional wave based on cosine, and distance from
-      the origin.
-
-      General form of a cosine wave:
-
-      F(x) = A cos(Bx - C) + D
-      
-      A = amplitude
-      B = compression factor on x axis, B = 2Pi / period
-      C/B = phase shift 
-      D = vertical shift
-   */
-
-   def waveIntensity(phaseShift: Double, vertShift:Double,
-         amp:Double, period:Double):Image[Double] = {
-      val compress = 2 * Pi / period
-      val phaseFactor = phaseShift * compress
-      (col:Double, row:Double) => {
-         val d = distance(col, row, 0, 0) 
-         amp * + cos(compress * d - phaseFactor) + vertShift
-      }
-   }
-
-   // Scale the colour of a image based on a wave function, based on
-   // distance of point from the origin.
-   def waveColorOrigin(phaseShift: Double, vertShift:Double,
-          amp:Double, period:Double):ImageTrans[Color] = {
-      (image:Image[Color]) =>
-         (col:Double, row:Double) => {
-            val scale = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
-            scaleColor(scale, image(col, row))
-         }
-   }
-
-   // Scale the colour of a image based on a wave function, based on
-   // distance of point from some other point.
-   def waveColor(phaseShift: Double, vertShift:Double, amp:Double,
-         period:Double, col:Double, row:Int):ImageTrans[Color] =
-      aboutPoint(waveColorOrigin(phaseShift, vertShift, amp, period), col, row) 
+   import ImageExamples._
    
    // Scale the magnification of a image based on a wave function, based on
    // distance of point from the origin.
@@ -168,7 +154,7 @@ object ImageTransExamples {
          amp:Double, period:Double):ImageTrans[T] = {
       (image:Image[T]) => {
          (col:Double, row:Double) => {
-            val scaleAmount = waveIntensity(phaseShift, vertShift, amp, period)(col, row)
+            val scaleAmount = waveIntensityOrigin(phaseShift, vertShift, amp, period)(col, row)
             scaleOrigin(scaleAmount)(image)(col, row)
          }
       }
@@ -186,7 +172,7 @@ object ImageTransExamples {
    def waveTranslate[T](phaseShift: Double, vertShift:Double, amp:Double, period:Double):ImageTrans[T] = {
       (image:Image[T]) =>
          (col, row) => {
-            val trans = waveIntensity(phaseShift, vertShift, amp, period)(col, 0)
+            val trans = waveIntensityOrigin(phaseShift, vertShift, amp, period)(col, 0)
             translate(0, trans)(image)(col, row)
          }
    }
@@ -197,23 +183,41 @@ object ImageExamples {
    import Math._
    import ImageFun._
 
-   // Constant color images
-   val redImage:Image[Color] = (_, _) => new Color(255, 0, 0)
-   val blueImage:Image[Color] = (_, _) => new Color(0, 0, 255)
-   val greenImage:Image[Color] = (_, _) => new Color(0, 255, 0)
-   val blueGreenImage:Image[Color] = (_, _) => new Color(0, 255, 255)
+   // Images entirely one color
+   def constantColor(color:Color):Image[Color] = (_, _) => color
 
-   // Black and white grid with vertical/horizontal lines
-   def grid(cellSize:Double, lineThickness:Double):Image[Color] = {
-      val black = new Color(0, 0, 0)
-      val white = new Color(255, 255, 255)
+   def grid(cellSize:Double, lineThickness:Double):Image[Boolean] = {
       (col, row) =>
-         if (modDouble(col, cellSize) < lineThickness || 
-             modDouble(row, cellSize) < lineThickness)
-            black
-         else
-            white
+         (modDouble(col, cellSize) >= lineThickness && 
+          modDouble(row, cellSize) >= lineThickness)
    }
+
+   /* Compute a two dimensional wave based on cosine, and distance from
+      the origin.
+
+      General form of a cosine wave:
+
+      F(x) = A cos(Bx - C) + D
+      
+      A = amplitude
+      B = compression factor on x axis, B = 2Pi / period
+      C/B = phase shift 
+      D = vertical shift
+   */
+
+   def waveIntensityOrigin(phaseShift: Double, vertShift:Double,
+         amp:Double, period:Double):Image[Double] = {
+      val compress = 2 * Pi / period
+      val phaseFactor = phaseShift * compress
+      (col:Double, row:Double) => {
+         val d = distance(col, row, 0, 0) 
+         amp * + cos(compress * d - phaseFactor) + vertShift
+      }
+   }
+
+   def waveIntensity(phaseShift: Double, vertShift:Double, amp:Double,
+         period:Double, col:Double, row:Int):Image[Double] =
+      translate(col, row)(waveIntensityOrigin(phaseShift, vertShift, amp, period))
 }
 
 object AnimationExamples {
@@ -222,12 +226,13 @@ object AnimationExamples {
    import ImageExamples._
    import ImageTransExamples._
 
-   def rippleAnimation(time:Double):Image[Color] = {
-      waveColor(time * 6, 0.7, 0.3, 50, 300, 200)(
-         waveColor(time * 2, 0.6, 0.3, 70, 50, 100)(blueImage))
+   def waveIntensityAnimation(time:Double):Image[Double] = {
+      val wave1 = waveIntensity(time * 6, 0.3, 0.2, 50, 300, 200)
+      val wave2 = waveIntensity(time * 2, 0.2, 0.1, 70, 50, 100)
+      combineImage(wave1, wave2, (x:Double, y:Double) => x + y)
    }
 
-   def waveGridAnimation(time:Double):Image[Color] = {
+   def waveGridAnimation(time:Double):Image[Boolean] = {
       val testGrid = ImageExamples.grid(20, 2)
       waveScale(time * 2, 1, 0.3, 100, 200, 150)(testGrid)
    }
@@ -272,8 +277,8 @@ class Display(cols:Int, rows:Int) {
    def open() = frame.open()
 }
 
+// Run an animation in a window indefinitely
 class Animate(cols:Int, rows:Int, animation:ImageFun.Animation[Color]) {
-
    def show() = {
       val display = new Display(cols, rows)
       var time = 0.0
@@ -287,6 +292,7 @@ class Animate(cols:Int, rows:Int, animation:ImageFun.Animation[Color]) {
    }
 }
 
+// Draw a still image in a window
 class Draw(cols:Int, rows:Int, image:ImageFun.Image[Color]) {
    def show() = {
       val display = new Display(cols, rows)
@@ -299,16 +305,18 @@ object Main {
    
    import AnimationExamples._
    import ImageExamples._
+   import ColorImplicits._
 
    val usage = """
       fun_graph demo 
 
       demo must be one of:
          red_image           an entirely red image 
+         grid                black and white grid
          translate_wave      translate pixels in a bitmap as vertical wave
          grid_wave           translate scale of a grid as wave from center of image
          bitmap_wave         translate scale of a bitmap as wave from center of image
-         colour_wave         translate colour of image as waves from two centers
+         intensity_wave      translate colour of image as waves from two centers
       """
 
    def main(args: Array[String]) = {
@@ -317,15 +325,17 @@ object Main {
       else
           args(0) match {
              case "red_image" =>
-                new Draw(400, 300, redImage).show()
+                new Draw(400, 300, constantColor(Color.red)).show()
+             case "grid" =>
+                new Draw(400, 300, grid(10, 2)).show()
              case "translate_wave" =>
                 new Animate(400, 300, waveTranslateAnimation).show()
              case "grid_wave" =>
                 new Animate(400, 300, waveGridAnimation).show()
              case "bitmap_wave" =>
                 new Animate(400, 300, waveBitmapAnimation).show()
-             case "colour_wave" =>
-                new Animate(400, 300, rippleAnimation).show()
+             case "intensity_wave" =>
+                new Animate(400, 300, waveIntensityAnimation).show()
              case _ =>
                 println("fun_graph: Unrecognised demo name")
                 println(usage)
