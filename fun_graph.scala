@@ -17,7 +17,6 @@ import swing._
 import java.awt.{Color}
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
-import javax.swing.{Timer}
 import java.io.{File}
 import math.{cos, sin, abs, round, sqrt, pow, Pi, min, max}
 
@@ -92,14 +91,14 @@ object ImageFun {
    // Apply an image transformation about a point
    def aboutPoint[T](transform:ImageTrans[T], col:Double, row:Double):ImageTrans[T] =
       translate(-col, -row) andThen transform andThen translate(col, row)
-
-   // Scale image about the origin
-   def scaleOrigin[T](factor:Double):ImageTrans[T] =
-      coordTrans((col, row) => (col / factor, row / factor))
    
    // Translate an image
    def translate[T](colDelta:Double, rowDelta:Double):ImageTrans[T] =
       coordTrans((col, row) => (col - colDelta, row - rowDelta))
+
+   // Scale image about the origin
+   def scaleOrigin[T](factor:Double):ImageTrans[T] =
+      coordTrans((col, row) => (col / factor, row / factor))
 
    // Scale image about a center point
    def scale[T](factor:Double,
@@ -131,14 +130,6 @@ object ImageFun {
          val rowInt = modInt(row.toInt, numRows)
          new Color(pixels.getRGB(colInt, rowInt))
       }
-   }
-
-   // Scale all intensity components of a colour by the same factor
-   def scaleColor(scale:Double, color:Color):Color = {
-      val newRed = clampIntensity((color.getRed * scale).toInt)
-      val newGreen = clampIntensity((color.getGreen * scale).toInt)
-      val newBlue = clampIntensity((color.getBlue * scale).toInt)
-      new Color(newRed, newGreen, newBlue)
    }
 }
 
@@ -183,8 +174,11 @@ object ImageExamples {
    import Math._
    import ImageFun._
 
-   // Images entirely one color
-   def constantColor(color:Color):Image[Color] = (_, _) => color
+   val redImage = constImage(Color.red)
+
+   // Images entirely one value 
+   def constImage[T](value:T):Image[T] =
+      (_, _) => value 
 
    def grid(cellSize:Double, lineThickness:Double):Image[Boolean] = {
       (col, row) =>
@@ -218,6 +212,19 @@ object ImageExamples {
    def waveIntensity(phaseShift: Double, vertShift:Double, amp:Double,
          period:Double, col:Double, row:Int):Image[Double] =
       translate(col, row)(waveIntensityOrigin(phaseShift, vertShift, amp, period))
+
+   val gridImage = grid(20, 5)
+   def scaleRotate[T](factor:Double, angle:Double):ImageTrans[T] =
+      scaleOrigin(factor) andThen rotateOrigin(angle)
+   val scaledRotatedGrid = scaleRotate(2, Pi/4)(gridImage)
+   val bitmapImage = bitmap("floyd.png")
+   val scaledRotatedBitmap = scaleRotate(0.25, Pi/4)(bitmapImage)
+
+   def waveImage:Image[Double] = {
+      val wave1 = waveIntensity(0, 0.3, 0.2, 50, 300, 200)
+      val wave2 = waveIntensity(0, 0.2, 0.1, 70, 50, 100)
+      combineImage(wave1, wave2, (x:Double, y:Double) => x + y)
+   }
 }
 
 object AnimationExamples {
@@ -226,22 +233,19 @@ object AnimationExamples {
    import ImageExamples._
    import ImageTransExamples._
 
-   def waveIntensityAnimation(time:Double):Image[Double] = {
+   def waveAnimation(time:Double):Image[Double] = {
       val wave1 = waveIntensity(time * 6, 0.3, 0.2, 50, 300, 200)
       val wave2 = waveIntensity(time * 2, 0.2, 0.1, 70, 50, 100)
       combineImage(wave1, wave2, (x:Double, y:Double) => x + y)
    }
 
    def waveGridAnimation(time:Double):Image[Boolean] = {
-      val testGrid = ImageExamples.grid(20, 2)
-      waveScale(time * 2, 1, 0.3, 100, 200, 150)(testGrid)
+      val gridImage = ImageExamples.grid(20, 2)
+      waveScale(time * 2, 1, 0.3, 100, 200, 150)(gridImage)
    }
 
    def waveBitmapAnimation(time:Double):Image[Color] = {
-      val floydBitmap = bitmap("floyd.png")
-      val scaleRotateBitmap =
-         scale(0.1, 0, 0)(rotate(Pi/4, 0, 0)(floydBitmap))
-      waveScale(time * 2, 2, 0.8, 100, 200, 150)(scaleRotateBitmap)
+      waveScale(time * 2, 2, 0.8, 100, 200, 150)(scaledRotatedBitmap)
    }
 
    def waveTranslateAnimation(time:Double):Image[Color] = {
@@ -311,12 +315,16 @@ object Main {
       fun_graph demo 
 
       demo must be one of:
-         red_image           an entirely red image 
-         grid                black and white grid
-         translate_wave      translate pixels in a bitmap as vertical wave
-         grid_wave           translate scale of a grid as wave from center of image
-         bitmap_wave         translate scale of a bitmap as wave from center of image
-         intensity_wave      translate colour of image as waves from two centers
+         red_image             an entirely red image 
+         grid                  black and white grid
+         scaled_rotated_grid   grid rotated 45 degrees
+         bitmap                a tiled bitmap
+         scaled_rotated_bitmap a tiled bitmap
+         wave_image            grey scale waves image
+         wave_animation        grey scale waves animation
+         translate_wave        translate pixels in a bitmap as vertical wave
+         grid_wave             translate scale of a grid as wave from center of image
+         bitmap_wave           translate scale of a bitmap as wave from center of image
       """
 
    def main(args: Array[String]) = {
@@ -325,17 +333,25 @@ object Main {
       else
           args(0) match {
              case "red_image" =>
-                new Draw(400, 300, constantColor(Color.red)).show()
+                new Draw(400, 300, redImage).show()
              case "grid" =>
-                new Draw(400, 300, grid(10, 2)).show()
+                new Draw(400, 300, gridImage).show()
+             case "scaled_rotated_grid" =>
+                new Draw(400, 300, scaledRotatedGrid).show()
+             case "bitmap" =>
+                new Draw(400, 300, bitmapImage).show()
+             case "scaled_rotated_bitmap" =>
+                new Draw(400, 300, scaledRotatedBitmap).show()
+             case "wave_image" =>
+                new Draw(400, 300, waveImage).show()
+             case "wave_animation" =>
+                new Animate(400, 300, waveAnimation).show()
              case "translate_wave" =>
                 new Animate(400, 300, waveTranslateAnimation).show()
              case "grid_wave" =>
                 new Animate(400, 300, waveGridAnimation).show()
              case "bitmap_wave" =>
                 new Animate(400, 300, waveBitmapAnimation).show()
-             case "intensity_wave" =>
-                new Animate(400, 300, waveIntensityAnimation).show()
              case _ =>
                 println("fun_graph: Unrecognised demo name")
                 println(usage)
